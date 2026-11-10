@@ -25,6 +25,8 @@ import {
   initialNotifications,
   initialLiveBroadcast,
 } from '../data/initialData';
+import { AuthUser } from '../types/auth';
+import { isEmailMatch } from '../services/auth/oauthService';
 
 interface AppContextType {
   // Navigation & View
@@ -67,6 +69,7 @@ interface AppContextType {
     updates: { allowedScreens?: AppScreenId[]; active?: boolean; role?: UserRole }
   ) => void;
   hasScreenAccess: (screen: AppScreenId) => boolean;
+  syncAuthenticatedGoogleUser: (authUser: AuthUser) => void;
 
   // Notifications
   notifications: AppNotification[];
@@ -312,6 +315,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const hasScreenAccess = (screen: AppScreenId) => {
     return userProfile.active && userProfile.allowedScreens.includes(screen);
+  };
+
+  const syncAuthenticatedGoogleUser = (authUser: AuthUser) => {
+    const cleanEmail = authUser.email.toLowerCase().trim();
+
+    // 1. Verificar si ya existe en usersDirectory (por correo o Admin Master gabopp1972)
+    const isMasterEmail =
+      isEmailMatch('gabopp1972@gmail.com', cleanEmail) ||
+      isEmailMatch('gabopp1972@hotmail.com', cleanEmail) ||
+      cleanEmail.startsWith('gabopp1972@');
+
+    const existing = usersDirectory.find(
+      (u) => isEmailMatch(u.email, cleanEmail) || (isMasterEmail && u.role === 'admin')
+    );
+
+    if (existing) {
+      setActiveUserId(existing.id);
+      if (authUser.avatarUrl && existing.avatar !== authUser.avatarUrl) {
+        setUsersDirectory((prev) =>
+          prev.map((u) =>
+            u.id === existing.id ? { ...u, avatar: authUser.avatarUrl || u.avatar } : u
+          )
+        );
+      }
+      return;
+    }
+
+    // 2. Nuevo usuario autenticado con Google: agregarlo al directorio y abrir su perfil para completar Teléfono / MS Teams
+    const newId = `usr-google-${Date.now()}`;
+    const newProfile: UserProfile = {
+      id: newId,
+      name: authUser.name,
+      email: cleanEmail,
+      phone: '',
+      msTeamsUser: cleanEmail,
+      department: 'Por definir',
+      position: 'Colaborador',
+      avatar:
+        authUser.avatarUrl ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(authUser.name)}&background=0D9488&color=ffffff&bold=true`,
+      wellnessGoal: 'Bienestar integral',
+      registered: false,
+      active: true,
+      role: 'colaborador',
+      allowedScreens: ['feed', 'surveys', 'events', 'coaching', 'upload_content'],
+    };
+
+    setUsersDirectory((prev) => [...prev, newProfile]);
+    setActiveUserId(newId);
+    setIsProfileModalOpen(true);
   };
 
   // Notificaciones filtradas para el usuario actual (globales o dirigidas a él)
@@ -711,6 +764,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         switchActiveUser,
         updateUserPermissions,
         hasScreenAccess,
+        syncAuthenticatedGoogleUser,
         notifications,
         userNotifications,
         unreadNotificationsCount,

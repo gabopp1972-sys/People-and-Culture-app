@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { AuthProviderComponent, useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { FeedSection } from './components/FeedSection';
@@ -13,6 +14,8 @@ import { UserCreatePostModal } from './components/UserCreatePostModal';
 import { LiveBroadcastModal } from './components/LiveBroadcastModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { ShareSurveyModal } from './components/ShareSurveyModal';
+import { LoginView } from './components/auth/LoginView';
+import { AccessDeniedView } from './components/auth/AccessDeniedView';
 import {
   Sparkles,
   ClipboardCheck,
@@ -20,7 +23,6 @@ import {
   GraduationCap,
   Smartphone,
   Maximize2,
-  Lock,
 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -32,7 +34,6 @@ const MainAppContent: React.FC = () => {
     setIsMobileDeviceFrame,
     userProfile,
     hasScreenAccess,
-    setIsProfileModalOpen,
   } = useApp();
 
   const navItems: {
@@ -55,24 +56,7 @@ const MainAppContent: React.FC = () => {
 
       {/* Contenido Principal */}
       <main className="flex-1 w-full mx-auto px-2 sm:px-4 pt-3 sm:pt-6 pb-28 flex flex-col items-center">
-        {!userProfile.active ? (
-          <div className="max-w-md w-full my-16 bg-slate-900 border border-rose-500/40 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-rose-500/15 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/30">
-              <Lock className="w-8 h-8" />
-            </div>
-            <h2 className="text-xl font-bold text-white">Acceso Suspendido</h2>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              La cuenta <strong>{userProfile.name}</strong> se encuentra temporalmente inactiva por el Comando Central de Administración.
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsProfileModalOpen(true)}
-              className="px-5 py-2.5 bg-teal-500 text-slate-950 font-bold text-xs rounded-xl shadow-md"
-            >
-              Cambiar de Cuenta Activa
-            </button>
-          </div>
-        ) : viewMode === 'admin' && hasScreenAccess('admin_console') ? (
+        {viewMode === 'admin' && hasScreenAccess('admin_console') ? (
           <div className="w-full max-w-6xl">
             <AdminDashboard />
           </div>
@@ -196,10 +180,57 @@ const MainAppContent: React.FC = () => {
   );
 };
 
+const AuthGate: React.FC = () => {
+  const { user, isAuthenticated, deniedInfo, logout } = useAuth();
+  const { userProfile, syncAuthenticatedGoogleUser } = useApp();
+  const syncedEmailRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated && user && syncedEmailRef.current !== user.email) {
+      syncedEmailRef.current = user.email;
+      syncAuthenticatedGoogleUser(user);
+    }
+    if (!isAuthenticated) {
+      syncedEmailRef.current = null;
+    }
+  }, [isAuthenticated, user, syncAuthenticatedGoogleUser]);
+
+  if (deniedInfo) {
+    return (
+      <AccessDeniedView
+        email={deniedInfo.email}
+        isInactive={deniedInfo.isInactive}
+        reason={deniedInfo.reason}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
+  if (!userProfile.active) {
+    return (
+      <AccessDeniedView
+        user={user}
+        email={userProfile.email}
+        isInactive={true}
+        reason={`La cuenta "${userProfile.name}" se encuentra actualmente marcada como INACTIVA / SUSPENDIDA desde el Comando Central.`}
+        onLogout={logout}
+      />
+    );
+  }
+
+  return <MainAppContent />;
+};
+
 export default function App() {
   return (
-    <AppProvider>
-      <MainAppContent />
-    </AppProvider>
+    <AuthProviderComponent>
+      <AppProvider>
+        <AuthGate />
+      </AppProvider>
+    </AuthProviderComponent>
   );
 }

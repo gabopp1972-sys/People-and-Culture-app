@@ -14,7 +14,7 @@ export const initialUsersDirectory: UserProfile[] = [
   {
     id: 'usr-1',
     name: 'Gabriel Pérez Ponce',
-    email: 'gabriel.perez@wellbeing-corp.com',
+    email: 'gabopp1972@gmail.com',
     phone: '+525512345678',
     msTeamsUser: 'gabriel.perez@wellbeing-corp.com',
     department: 'Transformación & Personas',

@@ -8,8 +8,10 @@ import {
   Bell,
   Radio,
   ExternalLink,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 export const Header: React.FC = () => {
   const {
@@ -26,6 +28,7 @@ export const Header: React.FC = () => {
     hasScreenAccess,
   } = useApp();
 
+  const { logout } = useAuth();
   const canAccessAdmin = hasScreenAccess('admin_console');
 
   return (
@@ -141,11 +144,21 @@ export const Header: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsEmergencyModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-[11px] sm:text-xs font-black shadow-lg shadow-red-600/40 transition-all active:scale-95 ring-2 ring-red-400/50 animate-pulse hover:animate-none shrink-0 z-10"
+              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-[10px] sm:text-xs font-black shadow-lg shadow-red-600/40 transition-all active:scale-95 ring-2 ring-red-400/50 animate-pulse hover:animate-none shrink-0 z-10"
               title="Botón de Emergencia Inmediata (WhatsApp)"
             >
               <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="tracking-wide">SOS</span>
+            </button>
+
+            {/* Botón Cerrar Sesión OAuth */}
+            <button
+              type="button"
+              onClick={logout}
+              className="p-1.5 rounded-xl bg-slate-900 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-500/30 transition-all shrink-0"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
