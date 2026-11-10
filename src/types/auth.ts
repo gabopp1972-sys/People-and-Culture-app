@@ -9,3 +9,4 @@ export interface AuthUser {
   accessToken?: string;
   expiresAt?: number;
 }
+
