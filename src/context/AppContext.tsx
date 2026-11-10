@@ -66,7 +66,7 @@ interface AppContextType {
   switchActiveUser: (userId: string) => void;
   updateUserPermissions: (
     userId: string,
-    updates: Partial<Pick<UserProfile, 'allowedScreens' | 'active' | 'role' | 'email' | 'name' | 'department' | 'phone' | 'msTeamsUser' | 'position'>>
+    updates: Partial<UserProfile>
   ) => void;
   adminCreateUser: (
     data: Omit<UserProfile, 'id' | 'registered'>
@@ -337,7 +337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateUserPermissions = (
     userId: string,
-    updates: Partial<Pick<UserProfile, 'allowedScreens' | 'active' | 'role' | 'email' | 'name' | 'department' | 'phone' | 'msTeamsUser' | 'position'>>
+    updates: Partial<UserProfile>
   ) => {
     setUsersDirectory((prev) =>
       prev.map((u) => {

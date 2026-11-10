@@ -31,7 +31,7 @@ import {
   Send,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { AppScreenId, PostType, UserRole } from '../../types';
+import { AppScreenId, PostType, UserProfile, UserRole } from '../../types';
 
 const allScreensConfig: { id: AppScreenId; label: string }[] = [
   { id: 'feed', label: 'Feed Social' },
@@ -91,6 +91,19 @@ export const AdminDashboard: React.FC = () => {
     'coaching',
     'upload_content',
   ]);
+
+  // Edit Existing User Profile Modal
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserPhone, setEditUserPhone] = useState('');
+  const [editUserTeams, setEditUserTeams] = useState('');
+  const [editUserDept, setEditUserDept] = useState('');
+  const [editUserPosition, setEditUserPosition] = useState('');
+  const [editUserAvatar, setEditUserAvatar] = useState('');
+  const [editUserGoal, setEditUserGoal] = useState('');
+  const [editUserRole, setEditUserRole] = useState<UserRole>('colaborador');
+  const [editUserScreens, setEditUserScreens] = useState<AppScreenId[]>([]);
 
   // Transmisión en Vivo Meet State
   const [liveTitle, setLiveTitle] = useState('Sesión Extraordinaria de Bienestar & Anuncios Directivos');
@@ -292,6 +305,40 @@ export const AdminDashboard: React.FC = () => {
     setNewUserTeams('');
   };
 
+  const openEditUserProfile = (usr: UserProfile) => {
+    setEditingUserId(usr.id);
+    setEditUserName(usr.name);
+    setEditUserEmail(usr.email);
+    setEditUserPhone(usr.phone);
+    setEditUserTeams(usr.msTeamsUser);
+    setEditUserDept(usr.department);
+    setEditUserPosition(usr.position);
+    setEditUserAvatar(usr.avatar);
+    setEditUserGoal(usr.wellnessGoal);
+    setEditUserRole(usr.role);
+    setEditUserScreens(usr.allowedScreens);
+  };
+
+  const handleSaveEditedUserProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUserId || !editUserName.trim() || !editUserEmail.trim()) return;
+
+    updateUserPermissions(editingUserId, {
+      name: editUserName.trim(),
+      email: editUserEmail.trim().toLowerCase(),
+      phone: editUserPhone.trim(),
+      msTeamsUser: editUserTeams.trim() || editUserEmail.trim().toLowerCase(),
+      department: editUserDept.trim() || 'General',
+      position: editUserPosition.trim() || 'Colaborador',
+      avatar: editUserAvatar.trim(),
+      wellnessGoal: editUserGoal.trim(),
+      role: editUserRole,
+      allowedScreens: editUserScreens,
+    });
+
+    setEditingUserId(null);
+  };
+
   const handleToggleUserScreen = (userId: string, screenId: AppScreenId, currentScreens: AppScreenId[]) => {
     const exists = currentScreens.includes(screenId);
     const updated = exists
@@ -413,21 +460,6 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-400">
                         <span>{usr.department} • <strong className="text-teal-300 font-mono">{usr.email}</strong></span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updatedMail = window.prompt(
-                              `Editar correo Gmail autorizado para ${usr.name}:`,
-                              usr.email
-                            );
-                            if (updatedMail && updatedMail.trim()) {
-                              updateUserPermissions(usr.id, { email: updatedMail.trim().toLowerCase() });
-                            }
-                          }}
-                          className="text-indigo-400 hover:text-indigo-300 underline text-[10px]"
-                        >
-                          Editar Gmail
-                        </button>
                       </div>
                       <p className="text-[10px] text-teal-400 font-mono mt-0.5">
                         WhatsApp: {usr.phone} | MS Teams: {usr.msTeamsUser}
@@ -436,6 +468,16 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => openEditUserProfile(usr)}
+                      className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
+                      title="Editar todos los datos del perfil y accesos del usuario"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Editar Perfil</span>
+                    </button>
+
                     <select
                       value={usr.role}
                       onChange={(e) =>
@@ -1449,6 +1491,175 @@ export const AdminDashboard: React.FC = () => {
                 </button>
                 <button type="submit" className="flex-1 py-2.5 bg-teal-500 text-slate-950 rounded-xl font-bold shadow-md">
                   Autorizar Acceso Gmail
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR PERFIL DE USUARIO EXISTENTE DESDE ACCESOS */}
+      {editingUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 text-white">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit className="w-5 h-5 text-indigo-400" />
+                Editar Perfil y Accesos de Usuario
+              </h3>
+              <button type="button" onClick={() => setEditingUserId(null)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedUserProfile} className="space-y-3 text-xs">
+              <div className="flex items-center gap-3 pb-1">
+                <img
+                  src={editUserAvatar || 'https://ui-avatars.com/api/?name=U'}
+                  alt="Avatar"
+                  className="w-14 h-14 rounded-2xl object-cover border border-indigo-400 shrink-0"
+                />
+                <div className="flex-1">
+                  <label className="block text-slate-300 mb-1">URL de Fotografía / Avatar</label>
+                  <input
+                    type="url"
+                    value={editUserAvatar}
+                    onChange={(e) => setEditUserAvatar(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Nombre completo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editUserName}
+                    onChange={(e) => setEditUserName(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-300 font-semibold mb-1">Correo Gmail Autorizado *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editUserEmail}
+                    onChange={(e) => setEditUserEmail(e.target.value)}
+                    placeholder="usuario@gmail.com"
+                    className="w-full bg-slate-800 border border-teal-500/40 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Teléfono / WhatsApp</label>
+                  <input
+                    type="text"
+                    value={editUserPhone}
+                    onChange={(e) => setEditUserPhone(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1">Usuario MS Teams</label>
+                  <input
+                    type="text"
+                    value={editUserTeams}
+                    onChange={(e) => setEditUserTeams(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Departamento / Área</label>
+                  <input
+                    type="text"
+                    value={editUserDept}
+                    onChange={(e) => setEditUserDept(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1">Puesto / Cargo</label>
+                  <input
+                    type="text"
+                    value={editUserPosition}
+                    onChange={(e) => setEditUserPosition(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Objetivo de Bienestar</label>
+                  <input
+                    type="text"
+                    value={editUserGoal}
+                    onChange={(e) => setEditUserGoal(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1">Rol en la App</label>
+                  <select
+                    value={editUserRole}
+                    disabled={editingUserId === 'usr-1'}
+                    onChange={(e) => setEditUserRole(e.target.value as UserRole)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white disabled:opacity-60"
+                  >
+                    <option value="colaborador">Colaborador</option>
+                    <option value="lider">Líder</option>
+                    <option value="coach">Coach</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold uppercase text-[10px] mb-1.5">
+                  Pantallas y Módulos Autorizados:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {allScreensConfig.map((scr) => {
+                    const checked = editUserScreens.includes(scr.id);
+                    return (
+                      <button
+                        key={scr.id}
+                        type="button"
+                        disabled={editingUserId === 'usr-1'}
+                        onClick={() =>
+                          setEditUserScreens((prev) =>
+                            checked ? prev.filter((s) => s !== scr.id) : [...prev, scr.id]
+                          )
+                        }
+                        className={`p-2 rounded-xl border text-[11px] font-semibold flex items-center justify-between disabled:opacity-60 ${
+                          checked
+                            ? 'border-indigo-400 bg-indigo-500/20 text-indigo-200'
+                            : 'border-slate-800 bg-slate-950 text-slate-500'
+                        }`}
+                      >
+                        <span>{scr.label}</span>
+                        {checked ? <CheckCircle className="w-3.5 h-3.5 text-indigo-400" /> : <XCircle className="w-3.5 h-3.5 text-slate-600" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setEditingUserId(null)} className="flex-1 py-2.5 bg-slate-800 rounded-xl font-bold">
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-1.5">
+                  <Save className="w-4 h-4" />
+                  <span>Guardar Cambios</span>
                 </button>
               </div>
             </form>
