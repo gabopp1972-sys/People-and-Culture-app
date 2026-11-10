@@ -182,7 +182,7 @@ const MainAppContent: React.FC = () => {
 
 const AuthGate: React.FC = () => {
   const { user, isAuthenticated, deniedInfo, logout } = useAuth();
-  const { userProfile, syncAuthenticatedGoogleUser } = useApp();
+  const { userProfile, syncAuthenticatedGoogleUser, findAuthorizedProfileByEmail } = useApp();
   const syncedEmailRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -206,17 +206,31 @@ const AuthGate: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <LoginView />;
   }
 
-  if (!userProfile.active) {
+  const authorizedProfile = findAuthorizedProfileByEmail(user.email);
+
+  if (!authorizedProfile) {
     return (
       <AccessDeniedView
         user={user}
-        email={userProfile.email}
+        email={user.email}
+        isInactive={false}
+        reason={`Acceso denegado: El correo electrónico "${user.email}" no se encuentra registrado en la configuración de accesos del Comando Central de Wellbeing.`}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (!authorizedProfile.active || !userProfile.active) {
+    return (
+      <AccessDeniedView
+        user={user}
+        email={authorizedProfile.email}
         isInactive={true}
-        reason={`La cuenta "${userProfile.name}" se encuentra actualmente marcada como INACTIVA / SUSPENDIDA desde el Comando Central.`}
+        reason={`La cuenta "${authorizedProfile.name}" (${user.email}) se encuentra actualmente marcada como INACTIVA / SUSPENDIDA desde el Comando Central.`}
         onLogout={logout}
       />
     );

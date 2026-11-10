@@ -156,10 +156,11 @@ export const validateEmailAuthorization = (
     return { authorized: true, matchedUser: existing };
   }
 
-  // 3. Cuentas Gmail autenticadas por Google OAuth: autorizadas para auto-registro inicial
+  // 3. Si no existe un Gmail registrado en ninguno de los perfiles creados: DENEGAR ACCESO COMPLETAMENTE
   return {
-    authorized: true,
-    matchedUser: undefined, // Se creará/vinculará como nuevo colaborador en AppContext
+    authorized: false,
+    isInactive: false,
+    error: `Acceso denegado: El correo electrónico "${clean}" no se encuentra registrado en la configuración de accesos del Comando Central de Wellbeing.`,
   };
 };
 

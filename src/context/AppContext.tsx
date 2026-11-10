@@ -66,10 +66,15 @@ interface AppContextType {
   switchActiveUser: (userId: string) => void;
   updateUserPermissions: (
     userId: string,
-    updates: { allowedScreens?: AppScreenId[]; active?: boolean; role?: UserRole }
+    updates: Partial<Pick<UserProfile, 'allowedScreens' | 'active' | 'role' | 'email' | 'name' | 'department' | 'phone' | 'msTeamsUser' | 'position'>>
   ) => void;
+  adminCreateUser: (
+    data: Omit<UserProfile, 'id' | 'registered'>
+  ) => void;
+  adminDeleteUser: (userId: string) => void;
   hasScreenAccess: (screen: AppScreenId) => boolean;
-  syncAuthenticatedGoogleUser: (authUser: AuthUser) => void;
+  syncAuthenticatedGoogleUser: (authUser: AuthUser) => boolean;
+  findAuthorizedProfileByEmail: (email: string) => UserProfile | undefined;
 
   // Notifications
   notifications: AppNotification[];
@@ -306,29 +311,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateUserPermissions = (
     userId: string,
-    updates: { allowedScreens?: AppScreenId[]; active?: boolean; role?: UserRole }
+    updates: Partial<Pick<UserProfile, 'allowedScreens' | 'active' | 'role' | 'email' | 'name' | 'department' | 'phone' | 'msTeamsUser' | 'position'>>
   ) => {
     setUsersDirectory((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, ...updates } : u))
     );
   };
 
+  const adminCreateUser = (data: Omit<UserProfile, 'id' | 'registered'>) => {
+    const newId = `usr-${Date.now()}`;
+    const newUser: UserProfile = {
+      ...data,
+      id: newId,
+      email: data.email.toLowerCase().trim(),
+      registered: true,
+    };
+    setUsersDirectory((prev) => [...prev, newUser]);
+  };
+
+  const adminDeleteUser = (userId: string) => {
+    setUsersDirectory((prev) => prev.filter((u) => u.id !== userId));
+  };
+
   const hasScreenAccess = (screen: AppScreenId) => {
     return userProfile.active && userProfile.allowedScreens.includes(screen);
   };
 
-  const syncAuthenticatedGoogleUser = (authUser: AuthUser) => {
-    const cleanEmail = authUser.email.toLowerCase().trim();
+  const findAuthorizedProfileByEmail = (email: string): UserProfile | undefined => {
+    const cleanEmail = (email || '').toLowerCase().trim();
+    if (!cleanEmail) return undefined;
 
-    // 1. Verificar si ya existe en usersDirectory (por correo o Admin Master gabopp1972)
     const isMasterEmail =
       isEmailMatch('gabopp1972@gmail.com', cleanEmail) ||
       isEmailMatch('gabopp1972@hotmail.com', cleanEmail) ||
       cleanEmail.startsWith('gabopp1972@');
 
-    const existing = usersDirectory.find(
+    return usersDirectory.find(
       (u) => isEmailMatch(u.email, cleanEmail) || (isMasterEmail && u.role === 'admin')
     );
+  };
+
+  const syncAuthenticatedGoogleUser = (authUser: AuthUser): boolean => {
+    const existing = findAuthorizedProfileByEmail(authUser.email);
 
     if (existing) {
       setActiveUserId(existing.id);
@@ -339,32 +363,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           )
         );
       }
-      return;
+      return true;
     }
 
-    // 2. Nuevo usuario autenticado con Google: agregarlo al directorio y abrir su perfil para completar Teléfono / MS Teams
-    const newId = `usr-google-${Date.now()}`;
-    const newProfile: UserProfile = {
-      id: newId,
-      name: authUser.name,
-      email: cleanEmail,
-      phone: '',
-      msTeamsUser: cleanEmail,
-      department: 'Por definir',
-      position: 'Colaborador',
-      avatar:
-        authUser.avatarUrl ||
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(authUser.name)}&background=0D9488&color=ffffff&bold=true`,
-      wellnessGoal: 'Bienestar integral',
-      registered: false,
-      active: true,
-      role: 'colaborador',
-      allowedScreens: ['feed', 'surveys', 'events', 'coaching', 'upload_content'],
-    };
-
-    setUsersDirectory((prev) => [...prev, newProfile]);
-    setActiveUserId(newId);
-    setIsProfileModalOpen(true);
+    // Acceso estricto: si no existe un Gmail en los perfiles creados, NO crear cuenta nueva
+    return false;
   };
 
   // Notificaciones filtradas para el usuario actual (globales o dirigidas a él)
@@ -763,8 +766,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerNewUser,
         switchActiveUser,
         updateUserPermissions,
+        adminCreateUser,
+        adminDeleteUser,
         hasScreenAccess,
         syncAuthenticatedGoogleUser,
+        findAuthorizedProfileByEmail,
         notifications,
         userNotifications,
         unreadNotificationsCount,
