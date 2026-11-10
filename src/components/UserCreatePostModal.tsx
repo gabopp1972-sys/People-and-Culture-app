@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PostType } from '../types';
+import { uploadMediaFileToCloud } from '../services/cloudSyncService';
 
 const presetMediaExamples: Record<string, { label: string; url: string }[]> = {
   video: [
@@ -48,7 +49,9 @@ export const UserCreatePostModal: React.FC = () => {
   const [category, setCategory] = useState<'salud' | 'emociones' | 'nutricion' | 'comunidad'>('salud');
   const [mediaUrl, setMediaUrl] = useState(presetMediaExamples.video[0].url);
   const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [audioSeconds, setAudioSeconds] = useState(8);
   const [tags, setTags] = useState('#PausaActiva #Bienestar');
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -84,6 +87,7 @@ export const UserCreatePostModal: React.FC = () => {
 
     setErrorNotice(null);
     setAttachedFileName(file.name);
+    setSelectedFile(file);
 
     // Detectar tipo por MIME o por extensión
     const lowerName = file.name.toLowerCase();
@@ -138,7 +142,7 @@ export const UserCreatePostModal: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorNotice(null);
 
@@ -147,15 +151,39 @@ export const UserCreatePostModal: React.FC = () => {
       return;
     }
 
-    const finalMedia = previewDataUrl || mediaUrl.trim();
-    if (!finalMedia) {
-      setErrorNotice('Por favor adjunta una foto, video o audio desde tu dispositivo, o ingresa un enlace.');
+    if (uploadMode === 'file' && !selectedFile && !previewDataUrl) {
+      setErrorNotice('Por favor adjunta una foto, video o audio desde tu dispositivo.');
+      return;
+    }
+
+    if (uploadMode === 'url' && !mediaUrl.trim()) {
+      setErrorNotice('Por favor ingresa una URL válida para tu publicación.');
       return;
     }
 
     if (type === 'audio' && audioSeconds > 8) {
       setErrorNotice('Los audios no deben exceder los 8 segundos de duración como lo indica la política de pausas rápidas.');
       return;
+    }
+
+    let finalMedia = uploadMode === 'url' ? mediaUrl.trim() : previewDataUrl || '';
+
+    if (uploadMode === 'file' && selectedFile) {
+      try {
+        setIsUploading(true);
+        finalMedia = await uploadMediaFileToCloud(selectedFile);
+      } catch (err) {
+        console.warn('[Upload] Fallback local si falla subida a Azure:', err);
+        if (!finalMedia || finalMedia.startsWith('blob:')) {
+          setErrorNotice(
+            'Error al subir el archivo a la nube compartida. Verifica tu conexión e intenta de nuevo.'
+          );
+          setIsUploading(false);
+          return;
+        }
+      } finally {
+        setIsUploading(false);
+      }
     }
 
     createPost({
@@ -178,6 +206,7 @@ export const UserCreatePostModal: React.FC = () => {
     setTitle('');
     setDescription('');
     setPreviewDataUrl(null);
+    setSelectedFile(null);
     setAttachedFileName(null);
     setIsCreatePostModalOpen(false);
   };
@@ -471,10 +500,15 @@ export const UserCreatePostModal: React.FC = () => {
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 text-slate-950 font-black rounded-2xl shadow-lg shadow-teal-500/25 transition-all active:scale-[0.99] text-xs flex items-center justify-center gap-2"
+              disabled={isUploading}
+              className="w-full py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 text-slate-950 font-black rounded-2xl shadow-lg shadow-teal-500/25 transition-all active:scale-[0.99] text-xs flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-wait"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>Publicar Contenido en el Feed</span>
+              <Sparkles className={`w-4 h-4 ${isUploading ? 'animate-spin' : ''}`} />
+              <span>
+                {isUploading
+                  ? 'Subiendo a la nube y sincronizando...'
+                  : 'Publicar Contenido en el Feed'}
+              </span>
             </button>
           </div>
         </form>

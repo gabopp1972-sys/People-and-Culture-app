@@ -1,6 +1,7 @@
 import { AuthUser } from '../../types/auth';
 import { UserProfile } from '../../types';
 import { initialUsersDirectory } from '../../data/initialData';
+import { fetchCloudState } from '../cloudSyncService';
 
 const STORAGE_KEY_SESSION = 'wb_auth_session';
 const STORAGE_KEY_LAST_ERROR = 'wb_last_auth_error';
@@ -111,6 +112,21 @@ export const isMasterAccount = (email: string): boolean => {
     isEmailMatch('gabopp1972@hotmail.com', clean) ||
     clean.startsWith('gabopp1972@')
   );
+};
+
+/**
+ * Pre-descarga el directorio de usuarios más reciente desde Azure antes de validar el login.
+ */
+export const prefetchCloudUsersDirectory = async (): Promise<void> => {
+  if (typeof window === 'undefined') return;
+  try {
+    const { state } = await fetchCloudState(true);
+    if (state?.usersDirectory && Array.isArray(state.usersDirectory) && state.usersDirectory.length > 0) {
+      localStorage.setItem('wb_users_dir', JSON.stringify(state.usersDirectory));
+    }
+  } catch (err) {
+    console.warn('[CloudSync] No se pudo pre-descargar directorio antes de auth:', err);
+  }
 };
 
 /**
@@ -316,6 +332,8 @@ export const loginWithGoogleGIS = (): Promise<AuthUser> => {
             const avatarUrl =
               info.picture ||
               `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D9488&color=ffffff&bold=true`;
+
+            await prefetchCloudUsersDirectory();
 
             const authCheck = validateEmailAuthorization(email, name);
             if (!authCheck.authorized) {

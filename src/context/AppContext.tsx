@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import {
   Coach,
   CoachingRequest,
@@ -27,6 +27,13 @@ import {
 } from '../data/initialData';
 import { AuthUser } from '../types/auth';
 import { isEmailMatch, isMasterAccount } from '../services/auth/oauthService';
+import {
+  fetchCloudState,
+  pushCloudStateImmediately,
+  scheduleCloudPush,
+  getBroadcastChannel,
+  WellbeingCloudState,
+} from '../services/cloudSyncService';
 
 interface AppContextType {
   // Navigation & View
@@ -131,6 +138,11 @@ interface AppContextType {
   // Config
   systemConfig: SystemConfig;
   updateSystemConfig: (data: Partial<SystemConfig>) => void;
+
+  // Real-time Cloud Sync (< 2s)
+  syncStatus: 'synced' | 'syncing' | 'offline';
+  lastCloudSyncAt: string | null;
+  forceSyncNow: () => Promise<void>;
 
   // Reset
   resetAllData: () => void;
@@ -286,6 +298,192 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     safeSave('wb_config', systemConfig);
   }, [systemConfig]);
+
+  // ====== MOTOR DE SINCRONIZACIÓN EN TIEMPO REAL EN LA NUBE (< 2 SEGUNDOS) ======
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('syncing');
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
+  const isApplyingRemoteRef = useRef<boolean>(false);
+  const hasHydratedCloudRef = useRef<boolean>(false);
+  const lastStateHashRef = useRef<string>('');
+
+  const buildCloudPayload = useCallback((): Partial<WellbeingCloudState> => {
+    return {
+      usersDirectory,
+      posts,
+      events,
+      coaches,
+      coachingRequests,
+      surveyResults,
+      notifications,
+      liveBroadcast,
+      systemConfig,
+    };
+  }, [
+    usersDirectory,
+    posts,
+    events,
+    coaches,
+    coachingRequests,
+    surveyResults,
+    notifications,
+    liveBroadcast,
+    systemConfig,
+  ]);
+
+  const computeStateHash = useCallback((p: Partial<WellbeingCloudState>): string => {
+    try {
+      return JSON.stringify({
+        usersDirectory: p.usersDirectory,
+        posts: p.posts,
+        events: p.events,
+        coaches: p.coaches,
+        coachingRequests: p.coachingRequests,
+        surveyResults: p.surveyResults,
+        notifications: p.notifications,
+        liveBroadcast: p.liveBroadcast,
+        systemConfig: p.systemConfig,
+      });
+    } catch {
+      return String(Date.now());
+    }
+  }, []);
+
+  const applyCloudStateToLocal = useCallback(
+    (cloudState: WellbeingCloudState) => {
+      isApplyingRemoteRef.current = true;
+      try {
+        const masterSeed = initialUsersDirectory[0];
+        if (Array.isArray(cloudState.usersDirectory) && cloudState.usersDirectory.length > 0) {
+          const healed = cloudState.usersDirectory.map((u) =>
+            u.id === 'usr-1' || isMasterAccount(u.email)
+              ? {
+                  ...masterSeed,
+                  ...u,
+                  email: masterSeed.email,
+                  active: true,
+                  role: 'admin' as UserRole,
+                  allowedScreens: masterSeed.allowedScreens,
+                }
+              : u
+          );
+          setUsersDirectory(healed);
+        }
+        if (Array.isArray(cloudState.posts)) setPosts(cloudState.posts);
+        if (Array.isArray(cloudState.events)) setEvents(cloudState.events);
+        if (Array.isArray(cloudState.coaches)) setCoaches(cloudState.coaches);
+        if (Array.isArray(cloudState.coachingRequests))
+          setCoachingRequests(cloudState.coachingRequests);
+        if (Array.isArray(cloudState.surveyResults)) setSurveyResults(cloudState.surveyResults);
+        if (Array.isArray(cloudState.notifications)) setNotifications(cloudState.notifications);
+        if (cloudState.liveBroadcast) setLiveBroadcast(cloudState.liveBroadcast);
+        if (cloudState.systemConfig) setSystemConfig(cloudState.systemConfig);
+
+        lastStateHashRef.current = computeStateHash(cloudState);
+        setLastCloudSyncAt(new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        setSyncStatus('synced');
+      } finally {
+        setTimeout(() => {
+          isApplyingRemoteRef.current = false;
+        }, 60);
+      }
+    },
+    [computeStateHash]
+  );
+
+  // 1. Hidratación inicial desde la nube + Polling cada 1.5 segundos (< 2s) + BroadcastChannel (0ms)
+  useEffect(() => {
+    let mounted = true;
+
+    const initSync = async () => {
+      try {
+        const { state } = await fetchCloudState(true);
+        if (!mounted) return;
+        if (state) {
+          applyCloudStateToLocal(state);
+        } else {
+          // Inicializar nube por primera vez con el estado semilla
+          const initialPayload = buildCloudPayload();
+          lastStateHashRef.current = computeStateHash(initialPayload);
+          const ok = await pushCloudStateImmediately(initialPayload, userProfile.email);
+          if (mounted) {
+            setSyncStatus(ok ? 'synced' : 'offline');
+            if (ok) {
+              setLastCloudSyncAt(new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            }
+          }
+        }
+      } catch {
+        if (mounted) setSyncStatus('offline');
+      } finally {
+        if (mounted) hasHydratedCloudRef.current = true;
+      }
+    };
+
+    initSync();
+
+    // Escuchar BroadcastChannel (0ms entre pestañas del mismo equipo)
+    const bus = getBroadcastChannel();
+    const handleBusMessage = (evt: MessageEvent) => {
+      if (evt.data?.type === 'LOCAL_SYNC_BROADCAST' && evt.data?.state) {
+        applyCloudStateToLocal(evt.data.state as WellbeingCloudState);
+      }
+    };
+    if (bus) {
+      bus.addEventListener('message', handleBusMessage);
+    }
+
+    // Polling continuo cada 1500ms (1.5 segundos) para sincronizar entre dispositivos
+    const interval = setInterval(async () => {
+      if (!hasHydratedCloudRef.current || isApplyingRemoteRef.current) return;
+      const { hasChanges, state } = await fetchCloudState(false);
+      if (!mounted) return;
+      if (hasChanges && state) {
+        applyCloudStateToLocal(state);
+      }
+    }, 1500);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      if (bus) {
+        bus.removeEventListener('message', handleBusMessage);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 2. Auto-Push inmediato (250ms debounce) cuando cualquier dato cambia localmente
+  useEffect(() => {
+    if (!hasHydratedCloudRef.current || isApplyingRemoteRef.current) return;
+
+    const payload = buildCloudPayload();
+    const currentHash = computeStateHash(payload);
+    if (currentHash === lastStateHashRef.current) return;
+
+    lastStateHashRef.current = currentHash;
+    setSyncStatus('syncing');
+
+    scheduleCloudPush(
+      () => payload,
+      userProfile.email,
+      250,
+      () => {
+        setSyncStatus('synced');
+        setLastCloudSyncAt(new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      }
+    );
+  }, [buildCloudPayload, computeStateHash, userProfile.email]);
+
+  const forceSyncNow = useCallback(async () => {
+    setSyncStatus('syncing');
+    const { state } = await fetchCloudState(true);
+    if (state) {
+      applyCloudStateToLocal(state);
+    } else {
+      const ok = await pushCloudStateImmediately(buildCloudPayload(), userProfile.email);
+      setSyncStatus(ok ? 'synced' : 'offline');
+    }
+  }, [applyCloudStateToLocal, buildCloudPayload, userProfile.email]);
 
   // Asegurar que la pestaña activa esté autorizada para el usuario actual
   useEffect(() => {
@@ -855,6 +1053,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rejectCoachingRequest,
         systemConfig,
         updateSystemConfig,
+        syncStatus,
+        lastCloudSyncAt,
+        forceSyncNow,
         resetAllData,
       }}
     >

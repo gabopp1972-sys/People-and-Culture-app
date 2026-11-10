@@ -26,6 +26,9 @@ export const Header: React.FC = () => {
     liveBroadcast,
     acceptLiveBroadcast,
     hasScreenAccess,
+    syncStatus,
+    lastCloudSyncAt,
+    forceSyncNow,
   } = useApp();
 
   const { logout } = useAuth();
@@ -43,9 +46,36 @@ export const Header: React.FC = () => {
               </div>
             </div>
             <div className="leading-tight">
-              <h1 className="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-1">
-                Wellbeing<span className="text-teal-400">.</span>
-              </h1>
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-1">
+                  Wellbeing<span className="text-teal-400">.</span>
+                </h1>
+                <button
+                  type="button"
+                  onClick={() => forceSyncNow()}
+                  title={`Sincronización Cloud en tiempo real (<2s)${lastCloudSyncAt ? ` • Última: ${lastCloudSyncAt}` : ''}`}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border transition-all ${
+                    syncStatus === 'synced'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : syncStatus === 'syncing'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                      : 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      syncStatus === 'synced'
+                        ? 'bg-emerald-400 animate-pulse'
+                        : syncStatus === 'syncing'
+                        ? 'bg-amber-400 animate-ping'
+                        : 'bg-rose-400'
+                    }`}
+                  />
+                  <span className="hidden md:inline">
+                    {syncStatus === 'synced' ? 'Live' : syncStatus === 'syncing' ? 'Sync...' : 'Offline'}
+                  </span>
+                </button>
+              </div>
               <p className="text-[9px] text-slate-400 hidden md:block">Salud & Personas</p>
             </div>
           </div>
