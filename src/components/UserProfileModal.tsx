@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Mail,
@@ -13,8 +13,10 @@ import {
   UserPlus,
   Users,
   Shield,
+  Upload,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { readAndCompressAvatarFile } from '../utils/imageUpload';
 
 const sampleAvatars = [
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
@@ -37,6 +39,7 @@ export const UserProfileModal: React.FC = () => {
   } = useApp();
 
   const [mode, setMode] = useState<'edit' | 'register' | 'switch'>('edit');
+  const avatarFileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(userProfile.name);
   const [email, setEmail] = useState(userProfile.email);
@@ -270,15 +273,38 @@ export const UserProfileModal: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-                <Camera className="w-3.5 h-3.5 text-slate-400" />
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+                  <Camera className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={avatar.startsWith('data:') ? 'Foto local cargada' : avatar}
+                    onChange={(e) => setAvatar(e.target.value)}
+                    placeholder="URL de fotografía..."
+                    className="bg-transparent text-[11px] text-white focus:outline-none w-full"
+                  />
+                </div>
                 <input
-                  type="url"
-                  value={avatar}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  placeholder="URL de fotografía..."
-                  className="bg-transparent text-[11px] text-white focus:outline-none w-full"
+                  type="file"
+                  ref={avatarFileRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const compressed = await readAndCompressAvatarFile(file);
+                    setAvatar(compressed);
+                  }}
                 />
+                <button
+                  type="button"
+                  onClick={() => avatarFileRef.current?.click()}
+                  className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-all"
+                  title="Cargar fotografía desde tu dispositivo"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Subir Foto</span>
+                </button>
               </div>
             </div>
 

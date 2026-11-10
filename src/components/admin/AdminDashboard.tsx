@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   LayoutDashboard,
   GraduationCap,
@@ -29,9 +29,11 @@ import {
   Lock,
   Unlock,
   Send,
+  Upload,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AppScreenId, PostType, UserProfile, UserRole } from '../../types';
+import { readAndCompressAvatarFile } from '../../utils/imageUpload';
 
 const allScreensConfig: { id: AppScreenId; label: string }[] = [
   { id: 'feed', label: 'Feed Social' },
@@ -83,6 +85,7 @@ export const AdminDashboard: React.FC = () => {
   const [newUserPhone, setNewUserPhone] = useState('+5255');
   const [newUserTeams, setNewUserTeams] = useState('');
   const [newUserDept, setNewUserDept] = useState('Operaciones');
+  const [newUserAvatar, setNewUserAvatar] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('colaborador');
   const [newUserScreens, setNewUserScreens] = useState<AppScreenId[]>([
     'feed',
@@ -91,6 +94,10 @@ export const AdminDashboard: React.FC = () => {
     'coaching',
     'upload_content',
   ]);
+
+  const editUserAvatarInputRef = useRef<HTMLInputElement>(null);
+  const newUserAvatarInputRef = useRef<HTMLInputElement>(null);
+  const newCoachAvatarInputRef = useRef<HTMLInputElement>(null);
 
   // Edit Existing User Profile Modal
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -290,9 +297,11 @@ export const AdminDashboard: React.FC = () => {
       msTeamsUser: newUserTeams.trim() || newUserEmail.trim().toLowerCase(),
       department: newUserDept.trim() || 'General',
       position: newUserRole === 'lider' ? 'Líder de Área' : 'Colaborador',
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        newUserName.trim()
-      )}&background=0D9488&color=ffffff&bold=true`,
+      avatar:
+        newUserAvatar.trim() ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          newUserName.trim()
+        )}&background=0D9488&color=ffffff&bold=true`,
       wellnessGoal: 'Bienestar integral',
       active: true,
       role: newUserRole,
@@ -303,6 +312,7 @@ export const AdminDashboard: React.FC = () => {
     setNewUserName('');
     setNewUserEmail('');
     setNewUserTeams('');
+    setNewUserAvatar('');
   };
 
   const openEditUserProfile = (usr: UserProfile) => {
@@ -1299,7 +1309,35 @@ export const AdminDashboard: React.FC = () => {
               <input type="text" value={newCoachSpecialties} onChange={(e) => setNewCoachSpecialties(e.target.value)} placeholder="Especialidades" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
               <input type="text" value={newCoachCredentials} onChange={(e) => setNewCoachCredentials(e.target.value)} placeholder="Certificaciones" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
               <input type="text" value={newCoachDays} onChange={(e) => setNewCoachDays(e.target.value)} placeholder="Días disponibles" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-              <input type="url" value={newCoachAvatar} onChange={(e) => setNewCoachAvatar(e.target.value)} placeholder="URL Avatar" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono" />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newCoachAvatar.startsWith('data:') ? 'Foto local cargada' : newCoachAvatar}
+                  onChange={(e) => setNewCoachAvatar(e.target.value)}
+                  placeholder="URL Avatar"
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                />
+                <input
+                  type="file"
+                  ref={newCoachAvatarInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const compressed = await readAndCompressAvatarFile(file);
+                    setNewCoachAvatar(compressed);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => newCoachAvatarInputRef.current?.click()}
+                  className="px-3 py-2 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-lg font-bold flex items-center gap-1 shrink-0"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Subir Foto</span>
+                </button>
+              </div>
 
               <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setIsNewCoachModalOpen(false)} className="flex-1 py-2.5 bg-slate-800 rounded-xl font-bold">Cancelar</button>
@@ -1382,6 +1420,51 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateAuthorizedUser} className="space-y-3 text-xs">
+              <div className="flex items-center gap-3 pb-1">
+                <img
+                  src={
+                    newUserAvatar ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      newUserName.trim() || 'U'
+                    )}&background=0D9488&color=ffffff&bold=true`
+                  }
+                  alt="Avatar nuevo usuario"
+                  className="w-14 h-14 rounded-2xl object-cover border border-teal-400 shrink-0"
+                />
+                <div className="flex-1 space-y-1.5">
+                  <label className="block text-slate-300">Fotografía (URL o archivo del dispositivo)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newUserAvatar.startsWith('data:') ? 'Foto local cargada' : newUserAvatar}
+                      onChange={(e) => setNewUserAvatar(e.target.value)}
+                      placeholder="https://... (opcional)"
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-[11px]"
+                    />
+                    <input
+                      type="file"
+                      ref={newUserAvatarInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await readAndCompressAvatarFile(file);
+                        setNewUserAvatar(compressed);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => newUserAvatarInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-lg font-bold flex items-center gap-1 shrink-0"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir Foto</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-slate-300 mb-1">Nombre completo *</label>
@@ -1519,14 +1602,37 @@ export const AdminDashboard: React.FC = () => {
                   alt="Avatar"
                   className="w-14 h-14 rounded-2xl object-cover border border-indigo-400 shrink-0"
                 />
-                <div className="flex-1">
-                  <label className="block text-slate-300 mb-1">URL de Fotografía / Avatar</label>
-                  <input
-                    type="url"
-                    value={editUserAvatar}
-                    onChange={(e) => setEditUserAvatar(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-[11px]"
-                  />
+                <div className="flex-1 space-y-1.5">
+                  <label className="block text-slate-300">Fotografía (URL o carga local desde dispositivo)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editUserAvatar.startsWith('data:') ? 'Foto local cargada' : editUserAvatar}
+                      onChange={(e) => setEditUserAvatar(e.target.value)}
+                      placeholder="https://..."
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-[11px]"
+                    />
+                    <input
+                      type="file"
+                      ref={editUserAvatarInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await readAndCompressAvatarFile(file);
+                        setEditUserAvatar(compressed);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => editUserAvatarInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 rounded-lg font-bold flex items-center gap-1 shrink-0"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir Foto</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
