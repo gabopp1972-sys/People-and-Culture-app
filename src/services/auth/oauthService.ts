@@ -103,12 +103,22 @@ export const getRegisteredUsersDirectory = (): UserProfile[] => {
   return [...initialUsersDirectory];
 };
 
+export const isMasterAccount = (email: string): boolean => {
+  const clean = (email || '').toLowerCase().trim();
+  if (!clean) return false;
+  return (
+    isEmailMatch('gabopp1972@gmail.com', clean) ||
+    isEmailMatch('gabopp1972@hotmail.com', clean) ||
+    clean.startsWith('gabopp1972@')
+  );
+};
+
 /**
  * Valida la autorización del correo autenticado por Google/Gmail contra el directorio de usuarios.
  */
 export const validateEmailAuthorization = (
   email: string,
-  nameHint?: string
+  _nameHint?: string
 ): {
   authorized: boolean;
   error?: string;
@@ -126,20 +136,31 @@ export const validateEmailAuthorization = (
   const list = getRegisteredUsersDirectory();
 
   // 1. Administrador / Desarrollador Master siempre autorizado (soporta Gmail y Hotmail)
-  if (
-    isEmailMatch('gabopp1972@gmail.com', clean) ||
-    isEmailMatch('gabopp1972@hotmail.com', clean) ||
-    clean.startsWith('gabopp1972@')
-  ) {
-    const master = list.find(
-      (u) =>
-        isEmailMatch(u.email, clean) ||
-        u.role === 'admin' ||
-        isEmailMatch('gabopp1972@gmail.com', u.email)
-    );
-    if (master) {
-      return { authorized: true, matchedUser: { ...master, active: true } };
-    }
+  if (isMasterAccount(clean)) {
+    const master =
+      list.find(
+        (u) =>
+          isEmailMatch(u.email, clean) ||
+          u.id === 'usr-1' ||
+          u.role === 'admin'
+      ) || initialUsersDirectory[0];
+
+    return {
+      authorized: true,
+      matchedUser: {
+        ...master,
+        active: true,
+        role: 'admin',
+        allowedScreens: [
+          'feed',
+          'surveys',
+          'events',
+          'coaching',
+          'upload_content',
+          'admin_console',
+        ],
+      },
+    };
   }
 
   // 2. Verificar si existe en el directorio y está explícitamente SUSPENDIDO / INACTIVO

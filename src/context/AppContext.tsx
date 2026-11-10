@@ -26,7 +26,7 @@ import {
   initialLiveBroadcast,
 } from '../data/initialData';
 import { AuthUser } from '../types/auth';
-import { isEmailMatch } from '../services/auth/oauthService';
+import { isEmailMatch, isMasterAccount } from '../services/auth/oauthService';
 
 interface AppContextType {
   // Navigation & View
@@ -154,10 +154,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [surveyToShare, setSurveyToShare] = useState<Survey | null>(null);
 
-  // Directorio Multiusuario
+  // Directorio Multiusuario con auto-reparación del perfil Master Admin
   const [usersDirectory, setUsersDirectory] = useState<UserProfile[]>(() => {
-    const saved = localStorage.getItem('wb_users_dir');
-    return saved ? JSON.parse(saved) : initialUsersDirectory;
+    const masterSeed = initialUsersDirectory[0];
+    try {
+      const saved = localStorage.getItem('wb_users_dir');
+      if (saved) {
+        const parsed: UserProfile[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasMaster = parsed.some((u) => u.id === 'usr-1' || isMasterAccount(u.email));
+          if (hasMaster) {
+            return parsed.map((u) =>
+              u.id === 'usr-1' || isMasterAccount(u.email)
+                ? {
+                    ...masterSeed,
+                    ...u,
+                    email: masterSeed.email,
+                    active: true,
+                    role: 'admin',
+                    allowedScreens: masterSeed.allowedScreens,
+                  }
+                : u
+            );
+          }
+          return [masterSeed, ...parsed];
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return initialUsersDirectory;
   });
 
   const [activeUserId, setActiveUserId] = useState<string>(() => {
@@ -314,7 +340,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updates: Partial<Pick<UserProfile, 'allowedScreens' | 'active' | 'role' | 'email' | 'name' | 'department' | 'phone' | 'msTeamsUser' | 'position'>>
   ) => {
     setUsersDirectory((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, ...updates } : u))
+      prev.map((u) => {
+        if (u.id !== userId) return u;
+        if (u.id === 'usr-1') {
+          return {
+            ...u,
+            ...updates,
+            active: true,
+            role: 'admin',
+            allowedScreens: initialUsersDirectory[0].allowedScreens,
+          };
+        }
+        return { ...u, ...updates };
+      })
     );
   };
 
@@ -330,6 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const adminDeleteUser = (userId: string) => {
+    if (userId === 'usr-1') return;
     setUsersDirectory((prev) => prev.filter((u) => u.id !== userId));
   };
 
@@ -341,14 +380,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanEmail = (email || '').toLowerCase().trim();
     if (!cleanEmail) return undefined;
 
-    const isMasterEmail =
-      isEmailMatch('gabopp1972@gmail.com', cleanEmail) ||
-      isEmailMatch('gabopp1972@hotmail.com', cleanEmail) ||
-      cleanEmail.startsWith('gabopp1972@');
+    if (isMasterAccount(cleanEmail)) {
+      const foundMaster =
+        usersDirectory.find((u) => u.id === 'usr-1' || isMasterAccount(u.email) || u.role === 'admin') ||
+        initialUsersDirectory[0];
+      return {
+        ...foundMaster,
+        active: true,
+        role: 'admin',
+        allowedScreens: initialUsersDirectory[0].allowedScreens,
+      };
+    }
 
-    return usersDirectory.find(
-      (u) => isEmailMatch(u.email, cleanEmail) || (isMasterEmail && u.role === 'admin')
-    );
+    return usersDirectory.find((u) => isEmailMatch(u.email, cleanEmail));
   };
 
   const syncAuthenticatedGoogleUser = (authUser: AuthUser): boolean => {

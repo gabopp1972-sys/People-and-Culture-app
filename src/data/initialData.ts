@@ -13,8 +13,8 @@ import {
 export const initialUsersDirectory: UserProfile[] = [
   {
     id: 'usr-1',
-    name: 'Gabriel Pérez Ponce',
-    email: 'gabopp1972@gmail.com',
+    name: 'Gabriel Pérez Ponce (Master)',
+    email: 'gabopp1972@gmail.com, gabopp1972@hotmail.com',
     phone: '+525512345678',
     msTeamsUser: 'gabriel.perez@wellbeing-corp.com',
     department: 'Transformación & Personas',
