@@ -70,9 +70,27 @@ export const AdminDashboard: React.FC = () => {
     stopLiveBroadcast,
     usersDirectory,
     updateUserPermissions,
+    adminCreateUser,
+    adminDeleteUser,
     switchActiveUser,
     setViewMode,
   } = useApp();
+
+  // New User Access Creation Modal
+  const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('+5255');
+  const [newUserTeams, setNewUserTeams] = useState('');
+  const [newUserDept, setNewUserDept] = useState('Operaciones');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('colaborador');
+  const [newUserScreens, setNewUserScreens] = useState<AppScreenId[]>([
+    'feed',
+    'surveys',
+    'events',
+    'coaching',
+    'upload_content',
+  ]);
 
   // Transmisión en Vivo Meet State
   const [liveTitle, setLiveTitle] = useState('Sesión Extraordinaria de Bienestar & Anuncios Directivos');
@@ -248,6 +266,32 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setSettingsSaved(false), 3000);
   };
 
+  const handleCreateAuthorizedUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserName.trim() || !newUserEmail.trim()) return;
+
+    adminCreateUser({
+      name: newUserName.trim(),
+      email: newUserEmail.trim().toLowerCase(),
+      phone: newUserPhone.trim(),
+      msTeamsUser: newUserTeams.trim() || newUserEmail.trim().toLowerCase(),
+      department: newUserDept.trim() || 'General',
+      position: newUserRole === 'lider' ? 'Líder de Área' : 'Colaborador',
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        newUserName.trim()
+      )}&background=0D9488&color=ffffff&bold=true`,
+      wellnessGoal: 'Bienestar integral',
+      active: true,
+      role: newUserRole,
+      allowedScreens: newUserScreens,
+    });
+
+    setIsNewUserModalOpen(false);
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserTeams('');
+  };
+
   const handleToggleUserScreen = (userId: string, screenId: AppScreenId, currentScreens: AppScreenId[]) => {
     const exists = currentScreens.includes(screenId);
     const updated = exists
@@ -329,12 +373,20 @@ export const AdminDashboard: React.FC = () => {
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-teal-400" />
-                Directorio de Usuarios y Autorización de Pantallas ({usersDirectory.length})
+                Control Estricto de Accesos por Gmail ({usersDirectory.length})
               </h3>
               <p className="text-xs text-slate-400">
-                Configura el rol, estado activo y las pantallas autorizadas a las que cada usuario puede navegar en Wellbeing.
+                Solo las cuentas Gmail registradas y activas en esta lista pueden ingresar a Wellbeing y ver únicamente sus pantallas asignadas.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsNewUserModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Registrar Nuevo Gmail</span>
+            </button>
           </div>
 
           <div className="space-y-4">
@@ -359,9 +411,24 @@ export const AdminDashboard: React.FC = () => {
                           {usr.role}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400">
-                        {usr.department} • {usr.email}
-                      </p>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                        <span>{usr.department} • <strong className="text-teal-300 font-mono">{usr.email}</strong></span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedMail = window.prompt(
+                              `Editar correo Gmail autorizado para ${usr.name}:`,
+                              usr.email
+                            );
+                            if (updatedMail && updatedMail.trim()) {
+                              updateUserPermissions(usr.id, { email: updatedMail.trim().toLowerCase() });
+                            }
+                          }}
+                          className="text-indigo-400 hover:text-indigo-300 underline text-[10px]"
+                        >
+                          Editar Gmail
+                        </button>
+                      </div>
                       <p className="text-[10px] text-teal-400 font-mono mt-0.5">
                         WhatsApp: {usr.phone} | MS Teams: {usr.msTeamsUser}
                       </p>
@@ -415,6 +482,21 @@ export const AdminDashboard: React.FC = () => {
                     >
                       Simular Vista
                     </button>
+
+                    {usr.id !== 'usr-1' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`¿Eliminar acceso de ${usr.name} (${usr.email})?`)) {
+                            adminDeleteUser(usr.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
+                        title="Eliminar perfil de acceso"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1238,6 +1320,137 @@ export const AdminDashboard: React.FC = () => {
                 <input type="text" value={eventTime} onChange={(e) => setEventTime(e.target.value)} className="bg-slate-800 rounded-lg px-3 py-2" />
               </div>
               <button type="submit" className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl">Crear Evento</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REGISTRAR NUEVO USUARIO CON GMAIL AUTORIZADO */}
+      {isNewUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-teal-500/50 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 text-white">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-teal-400" />
+                Registrar Usuario Autorizado (Gmail)
+              </h3>
+              <button type="button" onClick={() => setIsNewUserModalOpen(false)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAuthorizedUser} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Nombre completo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    placeholder="Ej. Laura Méndez"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-300 font-semibold mb-1">Correo Gmail Autorizado *</label>
+                  <input
+                    type="email"
+                    required
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    placeholder="usuario@gmail.com"
+                    className="w-full bg-slate-800 border border-teal-500/40 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Teléfono / WhatsApp</label>
+                  <input
+                    type="text"
+                    value={newUserPhone}
+                    onChange={(e) => setNewUserPhone(e.target.value)}
+                    placeholder="+5255..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1">Usuario MS Teams</label>
+                  <input
+                    type="text"
+                    value={newUserTeams}
+                    onChange={(e) => setNewUserTeams(e.target.value)}
+                    placeholder="usuario@empresa.com"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 mb-1">Departamento / Área</label>
+                  <input
+                    type="text"
+                    value={newUserDept}
+                    onChange={(e) => setNewUserDept(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1">Rol</label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="colaborador">Colaborador</option>
+                    <option value="lider">Líder</option>
+                    <option value="coach">Coach</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold uppercase text-[10px] mb-1.5">
+                  Pantallas a las que tiene autorización navegar:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {allScreensConfig.map((scr) => {
+                    const checked = newUserScreens.includes(scr.id);
+                    return (
+                      <button
+                        key={scr.id}
+                        type="button"
+                        onClick={() =>
+                          setNewUserScreens((prev) =>
+                            checked ? prev.filter((s) => s !== scr.id) : [...prev, scr.id]
+                          )
+                        }
+                        className={`p-2 rounded-xl border text-[11px] font-semibold flex items-center justify-between ${
+                          checked
+                            ? 'border-teal-400 bg-teal-500/20 text-teal-200'
+                            : 'border-slate-800 bg-slate-950 text-slate-500'
+                        }`}
+                      >
+                        <span>{scr.label}</span>
+                        {checked ? <CheckCircle className="w-3.5 h-3.5 text-teal-400" /> : <XCircle className="w-3.5 h-3.5 text-slate-600" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setIsNewUserModalOpen(false)} className="flex-1 py-2.5 bg-slate-800 rounded-xl font-bold">
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 py-2.5 bg-teal-500 text-slate-950 rounded-xl font-bold shadow-md">
+                  Autorizar Acceso Gmail
+                </button>
+              </div>
             </form>
           </div>
         </div>

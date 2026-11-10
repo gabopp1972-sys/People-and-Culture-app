@@ -141,41 +141,43 @@ export const UserProfileModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Selector de Modo: Editar / Nuevo Registro / Cambiar Usuario */}
-        <div className="px-5 pt-4">
-          <div className="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800 text-[11px] font-bold">
-            <button
-              type="button"
-              onClick={() => setMode('edit')}
-              className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
-                mode === 'edit' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Mi Perfil</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('register')}
-              className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
-                mode === 'register' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Nuevo Usuario</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('switch')}
-              className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
-                mode === 'switch' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Cuentas ({usersDirectory.length})</span>
-            </button>
+        {/* Selector de Modo: solo administradores pueden crear o simular cuentas */}
+        {userProfile.role === 'admin' && (
+          <div className="px-5 pt-4">
+            <div className="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setMode('edit')}
+                className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
+                  mode === 'edit' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Mi Perfil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('register')}
+                className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
+                  mode === 'register' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Nuevo Usuario</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('switch')}
+                className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
+                  mode === 'switch' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Cuentas ({usersDirectory.length})</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {savedSuccess ? (
           <div className="p-10 text-center space-y-4">
@@ -298,16 +300,21 @@ export const UserProfileModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Correo Electrónico *</label>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Correo Gmail Autorizado *
+                </label>
                 <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2">
                   <Mail className="w-4 h-4 text-teal-400 shrink-0" />
                   <input
                     type="email"
                     required
+                    readOnly={mode === 'edit' && userProfile.role !== 'admin'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="ana.torres@empresa.com"
-                    className="bg-transparent text-white focus:outline-none w-full font-mono text-[11px]"
+                    placeholder="usuario@gmail.com"
+                    className={`bg-transparent text-white focus:outline-none w-full font-mono text-[11px] ${
+                      mode === 'edit' && userProfile.role !== 'admin' ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   />
                 </div>
               </div>
